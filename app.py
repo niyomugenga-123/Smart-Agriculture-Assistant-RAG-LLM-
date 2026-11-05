@@ -11,7 +11,7 @@ from groq import Groq
 APP_DIR = Path(__file__).parent
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
-DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_GROQ_MODEL = "qwen/qwen3.8-27b"
 TOP_K = 4
 
 SYSTEM_PROMPT = """You are a smart agriculture assistant for smallholder farmers in Rwanda.
