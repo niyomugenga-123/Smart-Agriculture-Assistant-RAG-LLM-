@@ -30,7 +30,7 @@ EXAMPLES = [
     "How do I choose good cassava cuttings?",
 ]
 
-st.set_page_config(page_title="Smart Agriculture Assistant", page_icon="🌱")
+st.set_page_config(page_title="Smart Agriculture Assistant", page_icon="🌱", initial_sidebar_state="expanded")
 
 
 def get_secret(name, default=None):
@@ -99,16 +99,72 @@ if not get_secret("GROQ_API_KEY"):
 
 index, chunks, embedder = load_resources()
 
-st.title("🌱 Smart Agriculture Assistant")
-st.markdown(
-    "Ask about maize, beans, cassava, Irish potatoes and bananas. "
-    "Answers come only from trusted farming guides, with sources."
-)
+CSS = """
+<style>
+.hero{background:linear-gradient(135deg,#1B5E20 0%,#2E7D32 55%,#66A94D 100%);color:#fff;
+      padding:28px 32px;border-radius:18px;margin-bottom:18px;box-shadow:0 6px 18px rgba(27,94,32,.25)}
+.hero-title{font-size:2rem;font-weight:800;line-height:1.2}
+.hero-sub{opacity:.92;margin-top:6px;font-size:1.02rem}
+.chips{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+.chips span{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);
+            padding:4px 12px;border-radius:999px;font-size:.9rem}
+[data-testid="stChatMessage"]{background:#fff;border:1px solid #dbe7d3;border-radius:16px;
+            padding:14px 18px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.stButton>button{border-radius:12px;border:1px solid #2E7D32;color:#1B5E20;background:#fff;text-align:left}
+.stButton>button:hover{background:#E8F5E9;border-color:#1B5E20;color:#1B5E20}
+footer{visibility:hidden}
+</style>
+"""
+
+HERO = """
+<div class="hero">
+  <div class="hero-title">🌱 Smart Agriculture Assistant</div>
+  <div class="hero-sub">Practical, source-backed advice for smallholder farmers in Rwanda</div>
+  <div class="chips"><span>🌽 Maize</span><span>🫘 Beans</span><span>🍠 Cassava</span><span>🥔 Potato</span><span>🍌 Banana</span></div>
+</div>
+"""
+
+AVATARS = {"user": "🧑‍🌾", "assistant": "🌱"}
+SOURCES_MARK = "\n\n**Sources**\n"
+
+
+def render_reply(content):
+    if SOURCES_MARK in content:
+        answer, sources = content.split(SOURCES_MARK, 1)
+        st.markdown(answer)
+        with st.expander(f"📚 Sources ({len(sources.splitlines())})"):
+            st.markdown(sources)
+    else:
+        st.markdown(content)
+
+
+st.markdown(CSS, unsafe_allow_html=True)
+st.markdown(HERO, unsafe_allow_html=True)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "pending" not in st.session_state:
     st.session_state.pending = None
+
+crop_counts = {}
+for c in chunks:
+    crop = str(c.get("crop") or "other")
+    crop_counts[crop] = crop_counts.get(crop, 0) + 1
+n_docs = len({c.get("file") or c.get("source") for c in chunks})
+
+with st.sidebar:
+    st.markdown("### 🌾 About")
+    st.write("Ask farming questions and get answers drawn only from trusted guides, "
+             "with sources you can check.")
+    st.markdown("### 📚 Knowledge base")
+    st.write(f"{n_docs} documents · {len(chunks)} passages")
+    for crop, n in sorted(crop_counts.items()):
+        st.write(f"- {crop.title()}: {n} passages")
+    st.markdown("### 💡 Tips")
+    st.write("- Name the crop\n- Describe what you see on the plant\n- Ask one question at a time")
+    if st.button("🗑️ New conversation"):
+        st.session_state.messages = []
+        st.rerun()
 
 question = st.chat_input("Ask a question about your crops...")
 if st.session_state.pending:
@@ -118,27 +174,28 @@ if question:
     st.session_state.messages.append({"role": "user", "content": question})
 
 for m in st.session_state.messages:
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+    with st.chat_message(m["role"], avatar=AVATARS[m["role"]]):
+        if m["role"] == "assistant":
+            render_reply(m["content"])
+        else:
+            st.markdown(m["content"])
 
 if question:
-    with st.chat_message("assistant"):
-        with st.spinner("Searching the documents..."):
+    with st.chat_message("assistant", avatar=AVATARS["assistant"]):
+        with st.spinner("Searching the farming guides..."):
             reply = answer_question(question)
-        st.markdown(reply)
+        render_reply(reply)
     st.session_state.messages.append({"role": "assistant", "content": reply})
 elif not st.session_state.messages:
-    st.markdown("**Examples**")
+    with st.chat_message("assistant", avatar=AVATARS["assistant"]):
+        st.markdown("**Muraho! 👋** I'm your farming assistant. Ask me about growing, pests and "
+                    "diseases for maize, beans, cassava, potatoes and bananas. "
+                    "Try one of these:")
     cols = st.columns(2)
     for i, example in enumerate(EXAMPLES):
         if cols[i % 2].button(example, key=f"example_{i}"):
             st.session_state.pending = example
             st.rerun()
-
-if st.session_state.messages:
-    if st.button("🗑️ Clear chat"):
-        st.session_state.messages = []
-        st.rerun()
 
 st.caption("Answers come from documents from several countries. Always confirm pesticide names "
            "and doses with your local agricultural extension officer or the Rwanda Agriculture Board (RAB).")
